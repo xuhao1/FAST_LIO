@@ -1,3 +1,16 @@
+# Add Docker support
+
+Must run 
+```
+git submodule init
+git submodule update
+```
+first.
+
+```
+make amd64
+```
+
 ## Related Works and Extended Application
 
 **SLAM:**

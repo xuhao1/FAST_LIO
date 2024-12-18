@@ -10,20 +10,19 @@ help:
 	@echo ""
 
 arm64:
-	@docker build --platform=linux/arm64 -t fastlio2:arm64 -f ./Dockerfile .  
+	@docker build --platform=linux/arm64 -t buaadocker.xuhao1.me/fastlio2:arm64 -f ./Dockerfile .  
 
 pc:
-	@docker build --platform=linux/amd64 -t fastlio2:amd64 -f ./Dockerfile .  
+	@docker build --platform=linux/amd64 -t buaadocker.xuhao1.me/fastlio2:amd64 -f ./Dockerfile .  
 
 upload_arm64: arm64
-	@docker tag fastlio2:arm64 buaadocker.xuhao1.me/swarmtal_control:arm64
-	@docker push buaadocker.xuhao1.me/swarmtal_control:arm64
+	@docker push buaadocker.xuhao1.me/fastlio2:arm64
 
 upload_amd64: pc
-	@docker tag fastlio2:amd64 buaadocker.xuhao1.me/swarmtal_control:amd64
-	@docker push buaadocker.xuhao1.me/swarmtal_control:amd64
+	@docker push buaadocker.xuhao1.me/fastlio2:amd64
 
 upload: upload_amd64 upload_arm64
 
 clean:
-	@docker rmi -f buaadocker.xuhao1.me/swarmtal_control
+	@docker rmi -f buaadocker.xuhao1.me/fastlio2:amd64
+	@docker rmi -f buaadocker.xuhao1.me/fastlio2:arm64

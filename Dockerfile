@@ -25,5 +25,5 @@ RUN   . "/opt/ros/${ROS_VERSION}/setup.bash" && \
       cd $LIO_WS/src/livox_ros_driver2 && \
       ./build.sh ROS1
       # catkin_make -DCMAKE_BUILD_TYPE=Release
-# COPY ./entrypoint.sh /
-# ENTRYPOINT ["/entrypoint.sh"]
+COPY ./entrypoint.sh /
+ENTRYPOINT ["/entrypoint.sh"]
