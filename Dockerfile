@@ -11,7 +11,7 @@ RUN git clone https://github.com/Livox-SDK/Livox-SDK2.git && \
     mkdir -p Livox-SDK2/build && \
     cd Livox-SDK2/build  && \
     cmake ..  && \
-    make -j$(nproc)  && \
+    make -j8  && \
     make install
 
 # Ceres solver for calibration
@@ -19,7 +19,7 @@ RUN git clone https://github.com/HKUST-Swarm/ceres-solver -b D2SLAM && \
       cd ceres-solver && \
       mkdir build && cd build && \
       cmake  -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF -DBUILD_BENCHMARKS=OFF -DCUDA=OFF .. && \
-      make -j$(nproc) install && \
+      make -j8 install && \
       rm -rf ../../ceres-solver && \
       apt-get clean all
 
