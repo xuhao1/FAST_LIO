@@ -1,5 +1,12 @@
 > ROS2 Fork repo maintainer: [Ericsiii](https://github.com/Ericsii)
 
+# Config network
+sudo -s
+nmcli connection modify "Wired connection 1" ipv4.addresses 192.168.2.50/24
+nmcli connection modify "Wired connection 1" ipv4.gateway 192.168.2.1
+nmcli connection modify "Wired connection 1" ipv4.dns 8.8.8.8
+nmcli connection modify "Wired connection 1" ipv4.method manual
+
 ## Related Works and Extended Application
 
 **SLAM:**
