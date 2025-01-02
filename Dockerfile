@@ -4,7 +4,7 @@ ARG ROS_VERSION=iron
 ARG LIO_WS=/root/lio_ws
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y git libgoogle-glog-dev  libsuitesparse-dev libatlas-base-dev htop net-tools libeigen3-dev
+RUN apt-get update && apt upgrade -y && apt-get install -y git libgoogle-glog-dev  libsuitesparse-dev libatlas-base-dev htop net-tools libeigen3-dev
 
 
 RUN git clone https://github.com/Livox-SDK/Livox-SDK2.git && \
