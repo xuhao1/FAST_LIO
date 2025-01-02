@@ -3,7 +3,7 @@
 
 source /root/lio_ws/install/setup.bash
 if [ "$1" == "launch" ]; then
-    ros2 launch fast_lio mapping.launch.py
+    ros2 launch fast_lio mapping.launch.py rviz:=false
 else if [ "$1" == "bash" ]; then
     /bin/bash
 else
