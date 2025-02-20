@@ -12,7 +12,8 @@ RUN git clone https://github.com/Livox-SDK/Livox-SDK2.git && \
     cd Livox-SDK2/build  && \
     cmake ..  && \
     make -j8  && \
-    make install
+    make install && \
+    rm -rf /Livox-SDK2
 
 # Ceres solver for calibration
 RUN git clone https://github.com/HKUST-Swarm/ceres-solver -b D2SLAM && \
@@ -34,7 +35,8 @@ WORKDIR $LIO_WS
 SHELL ["/bin/bash", "-c"]
 RUN   . "/opt/ros/${ROS_VERSION}/setup.bash" && \
       cd $LIO_WS/src/livox_ros_driver2 && \
-      ./build.sh ROS1
-      # catkin_make -DCMAKE_BUILD_TYPE=Release
+      ./build.sh ROS1 && \
+      cd $LIO_WS/ && \
+      catkin_make -DCMAKE_BUILD_TYPE=Release
 COPY ./entrypoint.sh /
 ENTRYPOINT ["/entrypoint.sh"]

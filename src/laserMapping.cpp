@@ -136,9 +136,38 @@ nav_msgs::Path path;
 nav_msgs::Odometry odomAftMapped;
 geometry_msgs::Quaternion geoQuat;
 geometry_msgs::PoseStamped msg_body_pose;
+geometry_msgs::Point geoPos;
+Quaterniond q_gravity = Quaterniond::Identity();
 
 shared_ptr<Preprocess> p_pre(new Preprocess());
 shared_ptr<ImuProcess> p_imu(new ImuProcess());
+
+inline Vector3d quat2eulers(const Quaterniond &quat) {
+    Vector3d rpy;
+    rpy.x() = atan2(2 * (quat.w() * quat.x() + quat.y() * quat.z()),
+                    1 - 2 * (quat.x() * quat.x() + quat.y() * quat.y()));
+    rpy.y() = asin(2 * (quat.w() * quat.y() - quat.z() * quat.x()));
+    rpy.z() = atan2(2 * (quat.w() * quat.z() + quat.x() * quat.y()),
+                    1 - 2 * (quat.y() * quat.y() + quat.z() * quat.z()));
+    return rpy;
+}
+
+//rpy2quat
+inline Quaterniond eulers2quat(const Vector3d eul) {
+    return Eigen::AngleAxisd(eul.z(), Eigen::Vector3d::UnitZ())
+        * Eigen::AngleAxisd(eul.y(), Eigen::Vector3d::UnitY())
+        * Eigen::AngleAxisd(eul.x(), Eigen::Vector3d::UnitX());
+}
+
+inline Quaterniond g2R(const Eigen::Vector3d &g)
+{
+    Vector3d ng1 = g.normalized();
+    Vector3d ng2{0, 0, 1.0};
+    Quaterniond q0 = Quaterniond::FromTwoVectors(ng1, ng2);
+    double yaw = quat2eulers(q0).z();
+    q0 = eulers2quat(Vector3d{0, 0, -yaw}) * q0;
+    return q0;
+}
 
 void SigHandle(int sig)
 {
@@ -175,10 +204,10 @@ void pointBodyToWorld_ikfom(PointType const * const pi, PointType * const po, st
 }
 
 
-void pointBodyToWorld(PointType const * const pi, PointType * const po)
+void pointBodyToWorld(PointType const * const pi, PointType * const po, SO3 R_grav = SO3(Quaterniond::Identity()))
 {
     V3D p_body(pi->x, pi->y, pi->z);
-    V3D p_global(state_point.rot * (state_point.offset_R_L_I*p_body + state_point.offset_T_L_I) + state_point.pos);
+    V3D p_global = R_grav*(state_point.rot * (state_point.offset_R_L_I*p_body + state_point.offset_T_L_I) + state_point.pos);
 
     po->x = p_global(0);
     po->y = p_global(1);
@@ -187,20 +216,21 @@ void pointBodyToWorld(PointType const * const pi, PointType * const po)
 }
 
 template<typename T>
-void pointBodyToWorld(const Matrix<T, 3, 1> &pi, Matrix<T, 3, 1> &po)
+void pointBodyToWorld(const Matrix<T, 3, 1> &pi, Matrix<T, 3, 1> &po, SO3 R_grav = SO3(Quaterniond::Identity()))
 {
     V3D p_body(pi[0], pi[1], pi[2]);
-    V3D p_global(state_point.rot * (state_point.offset_R_L_I*p_body + state_point.offset_T_L_I) + state_point.pos);
+    V3D p_global = R_grav*(state_point.rot * (state_point.offset_R_L_I*p_body + state_point.offset_T_L_I) + state_point.pos);
+    p_global = R_grav * p_global;
 
     po[0] = p_global(0);
     po[1] = p_global(1);
     po[2] = p_global(2);
 }
 
-void RGBpointBodyToWorld(PointType const * const pi, PointType * const po)
+void RGBpointBodyToWorld(PointType const * const pi, PointType * const po, SO3 R_grav = SO3(Quaterniond::Identity()))
 {
     V3D p_body(pi->x, pi->y, pi->z);
-    V3D p_global(state_point.rot * (state_point.offset_R_L_I*p_body + state_point.offset_T_L_I) + state_point.pos);
+    V3D p_global = R_grav*(state_point.rot * (state_point.offset_R_L_I*p_body + state_point.offset_T_L_I) + state_point.pos);
 
     po->x = p_global(0);
     po->y = p_global(1);
@@ -475,7 +505,7 @@ void map_incremental()
 
 PointCloudXYZI::Ptr pcl_wait_pub(new PointCloudXYZI(500000, 1));
 PointCloudXYZI::Ptr pcl_wait_save(new PointCloudXYZI());
-void publish_frame_world(const ros::Publisher & pubLaserCloudFull)
+void publish_frame_world(const ros::Publisher & pubLaserCloudFull, Quaterniond q_grav=Quaterniond::Identity())
 {
     if(scan_pub_en)
     {
@@ -487,13 +517,13 @@ void publish_frame_world(const ros::Publisher & pubLaserCloudFull)
         for (int i = 0; i < size; i++)
         {
             RGBpointBodyToWorld(&laserCloudFullRes->points[i], \
-                                &laserCloudWorld->points[i]);
+                                &laserCloudWorld->points[i], q_grav);
         }
 
         sensor_msgs::PointCloud2 laserCloudmsg;
         pcl::toROSMsg(*laserCloudWorld, laserCloudmsg);
         laserCloudmsg.header.stamp = ros::Time().fromSec(lidar_end_time);
-        laserCloudmsg.header.frame_id = "camera_init";
+        laserCloudmsg.header.frame_id = "world";
         pubLaserCloudFull.publish(laserCloudmsg);
         publish_count -= PUBFRAME_PERIOD;
     }
@@ -548,37 +578,37 @@ void publish_frame_body(const ros::Publisher & pubLaserCloudFull_body)
     publish_count -= PUBFRAME_PERIOD;
 }
 
-void publish_effect_world(const ros::Publisher & pubLaserCloudEffect)
+void publish_effect_world(const ros::Publisher & pubLaserCloudEffect, Quaterniond q_grav=Quaterniond::Identity())
 {
     PointCloudXYZI::Ptr laserCloudWorld( \
                     new PointCloudXYZI(effct_feat_num, 1));
     for (int i = 0; i < effct_feat_num; i++)
     {
         RGBpointBodyToWorld(&laserCloudOri->points[i], \
-                            &laserCloudWorld->points[i]);
+                            &laserCloudWorld->points[i], q_grav.toRotationMatrix());
     }
     sensor_msgs::PointCloud2 laserCloudFullRes3;
     pcl::toROSMsg(*laserCloudWorld, laserCloudFullRes3);
     laserCloudFullRes3.header.stamp = ros::Time().fromSec(lidar_end_time);
-    laserCloudFullRes3.header.frame_id = "camera_init";
+    laserCloudFullRes3.header.frame_id = "world";
     pubLaserCloudEffect.publish(laserCloudFullRes3);
 }
 
-void publish_map(const ros::Publisher & pubLaserCloudMap)
+void publish_map(const ros::Publisher & pubLaserCloudMap, Quaterniond q_grav=Quaterniond::Identity())
 {
     sensor_msgs::PointCloud2 laserCloudMap;
     pcl::toROSMsg(*featsFromMap, laserCloudMap);
     laserCloudMap.header.stamp = ros::Time().fromSec(lidar_end_time);
-    laserCloudMap.header.frame_id = "camera_init";
+    laserCloudMap.header.frame_id = "world";
     pubLaserCloudMap.publish(laserCloudMap);
 }
 
 template<typename T>
 void set_posestamp(T & out)
 {
-    out.pose.position.x = state_point.pos(0);
-    out.pose.position.y = state_point.pos(1);
-    out.pose.position.z = state_point.pos(2);
+    out.pose.position.x = geoPos.x;
+    out.pose.position.y = geoPos.y;
+    out.pose.position.z = geoPos.z;
     out.pose.orientation.x = geoQuat.x;
     out.pose.orientation.y = geoQuat.y;
     out.pose.orientation.z = geoQuat.z;
@@ -588,7 +618,7 @@ void set_posestamp(T & out)
 
 void publish_odometry(const ros::Publisher & pubOdomAftMapped)
 {
-    odomAftMapped.header.frame_id = "camera_init";
+    odomAftMapped.header.frame_id = "world";
     odomAftMapped.child_frame_id = "body";
     odomAftMapped.header.stamp = ros::Time().fromSec(lidar_end_time);// ros::Time().fromSec(lidar_end_time);
     set_posestamp(odomAftMapped.pose);
@@ -596,6 +626,7 @@ void publish_odometry(const ros::Publisher & pubOdomAftMapped)
     auto P = kf.get_P();
     for (int i = 0; i < 6; i ++)
     {
+        // TODO: transform covariance to world frame
         int k = i < 3 ? i + 3 : i - 3;
         odomAftMapped.pose.covariance[i*6 + 0] = P(k, 3);
         odomAftMapped.pose.covariance[i*6 + 1] = P(k, 4);
@@ -616,14 +647,14 @@ void publish_odometry(const ros::Publisher & pubOdomAftMapped)
     q.setY(odomAftMapped.pose.pose.orientation.y);
     q.setZ(odomAftMapped.pose.pose.orientation.z);
     transform.setRotation( q );
-    br.sendTransform( tf::StampedTransform( transform, odomAftMapped.header.stamp, "camera_init", "body" ) );
+    br.sendTransform( tf::StampedTransform( transform, odomAftMapped.header.stamp, "world", "body" ) );
 }
 
 void publish_path(const ros::Publisher pubPath)
 {
     set_posestamp(msg_body_pose);
     msg_body_pose.header.stamp = ros::Time().fromSec(lidar_end_time);
-    msg_body_pose.header.frame_id = "camera_init";
+    msg_body_pose.header.frame_id = "world";
 
     /*** if path is too large, the rvis will crash ***/
     static int jjj = 0;
@@ -796,7 +827,7 @@ int main(int argc, char** argv)
     cout<<"p_pre->lidar_type "<<p_pre->lidar_type<<endl;
     
     path.header.stamp    = ros::Time::now();
-    path.header.frame_id ="camera_init";
+    path.header.frame_id ="world";
 
     /*** variables definition ***/
     int effect_feat_num = 0, frame_num = 0;
@@ -961,10 +992,17 @@ int main(int argc, char** argv)
             state_point = kf.get_x();
             euler_cur = SO3ToEuler(state_point.rot);
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
-            geoQuat.x = state_point.rot.coeffs()[0];
-            geoQuat.y = state_point.rot.coeffs()[1];
-            geoQuat.z = state_point.rot.coeffs()[2];
-            geoQuat.w = state_point.rot.coeffs()[3];
+            q_gravity = g2R(-Eigen::Vector3d(state_point.grav));
+            Vector3d _geoPos = q_gravity * state_point.pos;
+            geoPos.x = _geoPos(0);
+            geoPos.y = _geoPos(1);
+            geoPos.z = _geoPos(2);
+
+            Quaterniond _geoQuat = q_gravity * state_point.rot;
+            geoQuat.x = _geoQuat.coeffs()[0];
+            geoQuat.y = _geoQuat.coeffs()[1];
+            geoQuat.z = _geoQuat.coeffs()[2];
+            geoQuat.w = _geoQuat.coeffs()[3];
 
             double t_update_end = omp_get_wtime();
 
@@ -978,8 +1016,9 @@ int main(int argc, char** argv)
             
             /******* Publish points *******/
             if (path_en)                         publish_path(pubPath);
-            if (scan_pub_en || pcd_save_en)      publish_frame_world(pubLaserCloudFull);
+            if (scan_pub_en || pcd_save_en)      publish_frame_world(pubLaserCloudFull, q_gravity);
             if (scan_pub_en && scan_body_pub_en) publish_frame_body(pubLaserCloudFull_body);
+            //TODO: enable effect points
             // publish_effect_world(pubLaserCloudEffect);
             // publish_map(pubLaserCloudMap);
 
